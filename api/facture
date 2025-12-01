@@ -3,50 +3,36 @@ import json
 def handle(req):
     data = json.loads(req)
 
-    # ---- Champs reçus depuis Make / Airtable ----
-    client = data.get("Client", "")
-    adresse_client = data.get("Adresse_client", "")
-    email_client = data.get("Email_client", "")
-    siret_client = data.get("Siret_client", "")
-    pays_client = data.get("Pays_client", "")
+    prestations = data.get("Prestations", [])
+    prix_ht = data.get("Prix HT", [])
+    prix_ttc = data.get("Prix TTC", [])
+    tva_percent = data.get("TVA %", [])
+    montant_tva = data.get("Montant TVA", [])
 
-    id_facture = data.get("ID_Facture", "")
-    date_emission = data.get("Date_emission", "")
-    date_limite = data.get("Date_limite", "")
-    mode_paiement = data.get("Mode_paiement", "")
+    lignes = []
 
-    # Prestations : labels en array
-    prestations = data.get("Prestations_labels", [])
+    # Génère chaque ligne : "Nom – 1 × 200 € = 200 €"
+    for i in range(len(prestations)):
+        nom = prestations[i]
+        pu = prix_ht[i]        # prix unitaire HT
+        qte = 1                # On force 1 par prestation (comme tu veux)
+        total = prix_ht[i]     # total = PU × 1
 
-    # Prix HT & TTC : arrays numériques
-    prix_ht = data.get("Prix_HT", [])
-    prix_ttc = data.get("Prix_TTC", [])
+        lignes.append(f"{nom} – {qte} × {pu} € = {total} €")
 
-    # ---- Nettoyage / formatage ----
-
-    # Liste des prestations → texte multi-ligne pour Google Docs
-    prestations_text = "\n".join(prestations)
+    # Format final multi-lignes
+    prestations_text = "\n".join(lignes)
 
     # Totaux
     total_ht = sum(prix_ht)
     total_ttc = sum(prix_ttc)
+    total_tva = sum(montant_tva)
+    tva_unique = tva_percent[0] if tva_percent else 0
 
-    # ---- Construction du JSON final ----
-    result = {
-        "CLIENT": client,
-        "ADRESSE_CLIENT": adresse_client,
-        "EMAIL_CLIENT": email_client,
-        "SIRET_CLIENT": siret_client,
-        "PAYS_CLIENT": pays_client,
-
-        "ID_FACTURE": id_facture,
-        "DATE_EMISSION": date_emission,
-        "DATE_LIMITE": date_limite,
-        "MODE_PAIEMENT": mode_paiement,
-
+    return json.dumps({
         "LISTE_PRESTATIONS": prestations_text,
         "TOTAL_HT": total_ht,
+        "TVA_POURCENT": tva_unique,
+        "MONTANT_TVA": total_tva,
         "TOTAL_TTC": total_ttc
-    }
-
-    return json.dumps(result)
+    })
