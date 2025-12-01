@@ -2,20 +2,21 @@ from http.server import BaseHTTPRequestHandler
 import json
 
 class handler(BaseHTTPRequestHandler):
+
     def do_POST(self):
-        # Lire le body brut
-        content_length = int(self.headers['Content-Length'])
+        # Lire le body brut du POST
+        content_length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(content_length)
         data = json.loads(body)
 
-        # ---- extraction des arrays ----
+        # ---- Extraction des arrays ----
         prestations = data.get("Prestations", [])
         prix_ht = data.get("Prix HT", [])
         prix_ttc = data.get("Prix TTC", [])
         tva_percent = data.get("TVA %", [])
         montant_tva = data.get("Montant TVA", [])
 
-        # ---- formatage des lignes prestation ----
+        # ---- Formatage ----
         lignes = []
         for i in range(len(prestations)):
             nom = prestations[i]
@@ -26,7 +27,7 @@ class handler(BaseHTTPRequestHandler):
 
         prestations_text = "\n".join(lignes)
 
-        # ---- totaux ----
+        # ---- Totaux ----
         total_ht = sum(prix_ht)
         total_ttc = sum(prix_ttc)
         total_tva = sum(montant_tva)
@@ -40,20 +41,16 @@ class handler(BaseHTTPRequestHandler):
             "TOTAL_TTC": total_ttc
         }
 
-        # ---- réponse ----
-        response_bytes = json.dumps(result).encode()
+        # ---- Réponse ----
+        response_bytes = json.dumps(result).encode("utf-8")
 
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(response_bytes)
 
-    # Pour éviter l’erreur 405 GET
+
     def do_GET(self):
+        # GET non autorisé
         self.send_response(405)
         self.end_headers()
-
-    return {
-        "statusCode": 200,
-        "body": json.dumps(result)
-    }
