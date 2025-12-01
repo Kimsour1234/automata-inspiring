@@ -1,1 +1,52 @@
+import json
 
+def handle(req):
+    data = json.loads(req)
+
+    # ---- Champs reçus depuis Make / Airtable ----
+    client = data.get("Client", "")
+    adresse_client = data.get("Adresse_client", "")
+    email_client = data.get("Email_client", "")
+    siret_client = data.get("Siret_client", "")
+    pays_client = data.get("Pays_client", "")
+
+    id_facture = data.get("ID_Facture", "")
+    date_emission = data.get("Date_emission", "")
+    date_limite = data.get("Date_limite", "")
+    mode_paiement = data.get("Mode_paiement", "")
+
+    # Prestations : labels en array
+    prestations = data.get("Prestations_labels", [])
+
+    # Prix HT & TTC : arrays numériques
+    prix_ht = data.get("Prix_HT", [])
+    prix_ttc = data.get("Prix_TTC", [])
+
+    # ---- Nettoyage / formatage ----
+
+    # Liste des prestations → texte multi-ligne pour Google Docs
+    prestations_text = "\n".join(prestations)
+
+    # Totaux
+    total_ht = sum(prix_ht)
+    total_ttc = sum(prix_ttc)
+
+    # ---- Construction du JSON final ----
+    result = {
+        "CLIENT": client,
+        "ADRESSE_CLIENT": adresse_client,
+        "EMAIL_CLIENT": email_client,
+        "SIRET_CLIENT": siret_client,
+        "PAYS_CLIENT": pays_client,
+
+        "ID_FACTURE": id_facture,
+        "DATE_EMISSION": date_emission,
+        "DATE_LIMITE": date_limite,
+        "MODE_PAIEMENT": mode_paiement,
+
+        "LISTE_PRESTATIONS": prestations_text,
+        "TOTAL_HT": total_ht,
+        "TOTAL_TTC": total_ttc
+    }
+
+    return json.dumps(result)
