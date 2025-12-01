@@ -4,53 +4,61 @@ import json
 class handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
-        # Lire le body brut du POST
-        content_length = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(content_length)
-        data = json.loads(body)
+        # Lecture du body
+        content_length = int(self.headers.get("Content-Length", 0))
+        raw_body = self.rfile.read(content_length)
+        body_str = raw_body.decode("utf-8")
 
-        # ---- Extraction des arrays ----
-        prestations = data.get("Prestations", [])
-        prix_ht = data.get("Prix HT", [])
-        prix_ttc = data.get("Prix TTC", [])
-        tva_percent = data.get("TVA %", [])
-        montant_tva = data.get("Montant TVA", [])
+        # Parse JSON (si ce n'est pas du JSON valide, on renvoie une erreur lisible)
+        try:
+            data = json.loads(body_str)
+        except json.JSONDecodeError:
+            self.send_response(400)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(f"Body non JSON : {body_str}".encode("utf-8"))
+            return
 
-        # ---- Formatage ----
+        # 🔹 EXACTEMENT TES CLÉS JSON
+        prestations   = data["Prestations"]
+        prix_ht       = data["Prix HT"]
+        prix_ttc      = data["Prix TTC"]
+        tva_pourcent  = data["TVA %"]
+        montant_tva   = data["Montant TVA"]
+
+        # 🔹 Construction des lignes prestations
         lignes = []
-        for i in range(len(prestations)):
+        n = len(prestations)
+        for i in range(n):
             nom = prestations[i]
-            pu = prix_ht[i]
+            pu_ht = prix_ht[i] if i < len(prix_ht) else 0
             qte = 1
-            total = pu * qte
-            lignes.append(f"{nom} – {qte} × {pu} € = {total} €")
+            total_ligne = pu_ht * qte
+            lignes.append(f"{nom} – {qte} × {pu_ht} € = {total_ligne} €")
 
-        prestations_text = "\n".join(lignes)
+        liste_prestations = "\n".join(lignes)
 
-        # ---- Totaux ----
-        total_ht = sum(prix_ht)
+        # 🔹 Totaux
+        total_ht  = sum(prix_ht)
         total_ttc = sum(prix_ttc)
         total_tva = sum(montant_tva)
-        tva_unique = tva_percent[0] if tva_percent else 0
+        tva_unique = tva_pourcent[0] if len(tva_pourcent) > 0 else 0
 
+        # 🔹 JSON renvoyé à Make / Google Docs
         result = {
-            "LISTE_PRESTATIONS": prestations_text,
+            "LISTE_PRESTATIONS": liste_prestations,
             "TOTAL_HT": total_ht,
             "TVA_POURCENT": tva_unique,
             "MONTANT_TVA": total_tva,
             "TOTAL_TTC": total_ttc
         }
 
-        # ---- Réponse ----
-        response_bytes = json.dumps(result).encode("utf-8")
-
+        res_bytes = json.dumps(result).encode("utf-8")
         self.send_response(200)
-        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Type", "application/json; charset=utf-8")
         self.end_headers()
-        self.wfile.write(response_bytes)
-
+        self.wfile.write(res_bytes)
 
     def do_GET(self):
-        # GET non autorisé
         self.send_response(405)
         self.end_headers()
