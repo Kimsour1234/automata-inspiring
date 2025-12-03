@@ -6,64 +6,65 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 
+# ---- Initialisation globale (une fois au cold start) ----
+SERVICE_ACCOUNT_JSON = os.environ["GOOGLE_SERVICE_ACCOUNT_KEY"]
+PARENT_FOLDER_ID = os.environ["GOOGLE_PARENT_DRIVE_ID"]
+
+creds_info = json.loads(SERVICE_ACCOUNT_JSON)
+
+creds = service_account.Credentials.from_service_account_info(
+    creds_info,
+    scopes=["https://www.googleapis.com/auth/drive"]
+)
+
+drive = build("drive", "v3", credentials=creds)
+
+
 class handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
-            # --- lire le body JSON ---
-            content_length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(content_length).decode("utf-8")
-            data = json.loads(body)
+            # Lire le body JSON venant de Make
+            length = int(self.headers.get("Content-Length", 0))
+            raw_body = self.rfile.read(length).decode("utf-8") or "{}"
+            data = json.loads(raw_body)
 
-            nom_dossier = data.get("folder_name", "test")
+            # Nom du dossier à créer
+            folder_name = data.get("folder_name", "test")
 
-            # --- récupérer les variables d'environnement ---
-            service_email = os.environ["GOOGLE_SERVICE_ACCOUNT_EMAIL"]
-            private_key = os.environ["GOOGLE_SERVICE_ACCOUNT_KEY"].replace("\\n", "\n")
-            parent_id = os.environ["GOOGLE_PARENT_DRIVE_ID"]
-
-            creds_info = {
-                "type": "service_account",
-                "client_email": service_email,
-                "private_key": private_key,
-                "token_uri": "https://oauth2.googleapis.com/token",
-            }
-
-            creds = service_account.Credentials.from_service_account_info(
-                creds_info,
-                scopes=["https://www.googleapis.com/auth/drive"],
-            )
-
-            drive = build("drive", "v3", credentials=creds)
-
-            # --- créer le dossier dans Drive ---
             file_metadata = {
-                "name": nom_dossier,
+                "name": folder_name,
                 "mimeType": "application/vnd.google-apps.folder",
-                "parents": [parent_id],
+                "parents": [PARENT_FOLDER_ID],
             }
 
-            folder = drive.files().create(body=file_metadata, fields="id").execute()
-            folder_id = folder.get("id")
+            folder = drive.files().create(
+                body=file_metadata,
+                fields="id, name"
+            ).execute()
 
-            # --- réponse ---
-            resp = {
+            response_body = {
                 "status": "success",
-                "folder_id": folder_id,
-                "folder_name": nom_dossier,
+                "folder_id": folder["id"],
+                "folder_name": folder["name"],
             }
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()
-            self.wfile.write(json.dumps(resp).encode("utf-8"))
+            self.wfile.write(json.dumps(response_body).encode("utf-8"))
 
         except Exception as e:
+            # Retourner l’erreur à Make pour debug
             self.send_response(500)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()
-            self.wfile.write(json.dumps({"error": str(e)}).encode("utf-8"))
+            self.wfile.write(json.dumps({
+                "status": "error",
+                "message": str(e),
+            }).encode("utf-8"))
 
     def do_GET(self):
+        # On bloque GET
         self.send_response(405)
         self.end_headers()
